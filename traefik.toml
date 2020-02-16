@@ -1,0 +1,5 @@
+[tls.options]
+  [tls.options.my-tls-opt]
+    [tls.options.my-tls-opt.clientAuth]
+      caFiles = ["/run/secrets/trusted_ca"]
+      clientAuthType = "RequestClientCert"
