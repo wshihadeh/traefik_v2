@@ -1,0 +1,117 @@
+version: '3.7'
+
+networks:
+  traefik:
+    external: true
+
+volumes:
+  db_data:
+
+services:
+
+  proxy:
+    image: traefik:v2.1
+    command:
+      - '--providers.docker=true'
+      - '--entryPoints.web.address=:80'
+      - '--providers.providersThrottleDuration=2s'
+      - '--providers.docker.watch=true'
+      - '--providers.docker.swarmMode=true'
+      - '--providers.docker.swarmModeRefreshSeconds=15s'
+      - '--providers.docker.exposedbydefault=false'
+      - '--providers.docker.defaultRule=Host("local.me")'
+      - '--accessLog.bufferingSize=0'
+      - '--api=true'
+      - '--api.dashboard=true'
+      - '--api.insecure=true'
+      - '--ping.entryPoint=web'
+    volumes:
+      - '/var/run/docker.sock:/var/run/docker.sock:ro'
+    ports:
+      - '80:80'
+      - '8080:8080'
+    deploy:
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      update_config:
+        delay: 10s
+        order: start-first
+        parallelism: 1
+      rollback_config:
+        parallelism: 0
+        order: stop-first
+    logging:
+      driver: json-file
+      options:
+        'max-size': '10m'
+        'max-file': '5'
+    networks:
+      - traefik
+
+  mysql:
+    image: mysql:5.7
+    command: mysqld --general-log=1 --general-log-file=/var/log/mysql/general-log.log
+    deploy:
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      update_config:
+        delay: 10s
+        order: start-first
+        parallelism: 1
+      rollback_config:
+        parallelism: 0
+        order: stop-first
+    logging:
+      driver: json-file
+      options:
+        'max-size': '10m'
+        'max-file': '5'
+    networks:
+      - traefik
+    volumes:
+      - db_data:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: dummy
+      MYSQL_DATABASE: rails_blog_production
+
+  rails_blog_web:
+    image: wshihadeh/rails_blog:demo-v1
+    command: 'web'
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.http.services.blog.loadbalancer.server.port=8080
+        - traefik.http.routers.blog.rule=Host(`blog.local.me`)
+        - traefik.http.routers.blog.service=blog
+        - traefik.http.routers.blog.entrypoints=web
+        - traefik.docker.network=traefik
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      update_config:
+        delay: 10s
+        order: start-first
+        parallelism: 1
+      rollback_config:
+        parallelism: 0
+        order: stop-first
+    logging:
+      driver: json-file
+      options:
+        'max-size': '10m'
+        'max-file': '5'
+    networks:
+      - traefik
+    depends_on:
+      - mysql
+    environment:
+      DATABASE_URL: mysql2://root:dummy@mysql/rails_blog_production
+      RAILS_SERVE_STATIC_FILES: 'true'
