@@ -1,0 +1,16 @@
+traefik/http/middlewares/my-basic-auth/basicauth/users,traefik:$apr1$SnHDtk1N$$cpc7xSXXrMVnPYdF01WdC0
+traefik/http/middlewares/http_redirect/redirectscheme/scheme,http
+traefik/http/middlewares/http_redirect/redirectscheme/permanent,true
+traefik/http/routers/https_catchall/rule,HostRegexp(`{any:https.+}`)
+traefik/http/routers/https_catchall/entrypoints,web
+traefik/http/routers/https_catchall/service,pink@docker
+traefik/http/routers/https_catchall/middlewares,http_redirect
+traefik/http/routers/pink/rule,Host(`pink.local.me`)
+traefik/http/routers/pink/service,pink@docker
+traefik/http/routers/pink/entrypoints,web
+traefik/http/routers/blue/rule,Host(`blue.local.me`)
+traefik/http/routers/blue/service,blue@docker
+traefik/http/routers/blue/entrypoints,web
+traefik/http/routers/green/rule,Host(`green.local.me`)
+traefik/http/routers/green/service,green@docker
+traefik/http/routers/green/entrypoints,web

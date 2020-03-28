@@ -1,0 +1,149 @@
+version: '3.7'
+
+networks:
+  traefik:
+    external: true
+
+volumes:
+  db_data:
+  rd_data:
+
+services:
+  pink:
+    image: wshihadeh/whoami:latest
+    environment:
+      APP_COLOR: 'pink'
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.http.services.pink.loadbalancer.server.port=8080
+        - traefik.docker.network=traefik
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      update_config:
+        delay: 10s
+        order: start-first
+        parallelism: 1
+      rollback_config:
+        parallelism: 0
+        order: stop-first
+    networks:
+      - traefik
+  blue:
+    image: wshihadeh/whoami:latest
+    environment:
+      APP_COLOR: 'blue'
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.http.services.blue.loadbalancer.server.port=8080
+        - traefik.docker.network=traefik
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      update_config:
+        delay: 10s
+        order: start-first
+        parallelism: 1
+      rollback_config:
+        parallelism: 0
+        order: stop-first
+    networks:
+      - traefik
+
+  green:
+    image: wshihadeh/whoami:latest
+    environment:
+      APP_COLOR: 'green'
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.http.services.green.loadbalancer.server.port=8080
+        - traefik.docker.network=traefik
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      update_config:
+        delay: 10s
+        order: start-first
+        parallelism: 1
+      rollback_config:
+        parallelism: 0
+        order: stop-first
+    networks:
+      - traefik
+
+  redis:
+    image: wshihadeh/redis:traefik
+    volumes:
+    - rd_data:/data
+    - ./bootstrap_keys:/data/bootstrap_keys
+    deploy:
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      update_config:
+        delay: 10s
+        order: start-first
+        parallelism: 1
+      rollback_config:
+        parallelism: 0
+        order: stop-first
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+    networks:
+      - traefik
+
+  proxy:
+    image: traefik:v2.2
+    command:
+      - '--log.level=DEBUG'
+      - '--providers.docker=true'
+      - '--entryPoints.web.address=:80'
+      - '--providers.providersThrottleDuration=2s'
+      - '--providers.docker.watch=true'
+      - '--providers.docker.swarmMode=true'
+      - '--providers.docker.swarmModeRefreshSeconds=15s'
+      - '--providers.docker.exposedbydefault=false'
+      - '--providers.docker.defaultRule=Host("local.me")'
+      - '--accessLog.bufferingSize=0'
+      - '--api=true'
+      - '--api.dashboard=true'
+      - '--api.insecure=true'
+      - '--ping.entryPoint=web'
+      - '--providers.redis.endpoints=redis:6379'
+      - '--providers.redis.rootkey=traefik'
+    volumes:
+      - '/var/run/docker.sock:/var/run/docker.sock:ro'
+    ports:
+      - '80:80'
+      - '8080:8080'
+    deploy:
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      update_config:
+        delay: 10s
+        order: start-first
+        parallelism: 1
+      rollback_config:
+        parallelism: 0
+        order: stop-first
+    logging:
+      driver: json-file
+      options:
+        'max-size': '10m'
+        'max-file': '5'
+    networks:
+      - traefik
