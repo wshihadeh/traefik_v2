@@ -1,0 +1,138 @@
+version: '3.7'
+
+
+networks:
+  traefik:
+    external: true
+
+services:
+
+  pink:
+    image: emilevauge/whoami
+    environment:
+      APP_COLOR: 'pink'
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.http.services.pink.loadbalancer.server.port=80
+        - traefik.http.routers.pink.rule=Host(`pink.wshihadeh.cloud`)
+        - traefik.http.routers.pink.service=pink
+        - traefik.http.routers.pink.entrypoints=web
+        - traefik.http.routers.pink.middlewares=inflightreq-pink
+        - traefik.docker.network=traefik
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      update_config:
+        delay: 10s
+        order: start-first
+        parallelism: 1
+      rollback_config:
+        parallelism: 0
+        order: stop-first
+    networks:
+      - traefik
+
+  blue:
+    image: wshihadeh/whoami:soso
+    environment:
+      APP_COLOR: 'blue'
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.http.services.blue.loadbalancer.server.port=8080
+        - traefik.http.routers.blue.rule=Host(`blue.wshihadeh.cloud`)
+        - traefik.http.routers.blue.service=blue
+        - traefik.http.routers.blue.entrypoints=web
+        - traefik.http.routers.blue.middlewares=pink-ratelimit
+        - traefik.docker.network=traefik
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      update_config:
+        delay: 10s
+        order: start-first
+        parallelism: 1
+      rollback_config:
+        parallelism: 0
+        order: stop-first
+    networks:
+      - traefik
+
+
+  proxy:
+    image: traefik:v2.2
+    command:
+      - '--log.level=DEBUG'
+      - '--providers.docker=true'
+      - '--entryPoints.web.address=:80'
+      - '--entryPoints.metrics.address=:8082'
+      - '--providers.providersThrottleDuration=2s'
+      - '--providers.docker.watch=true'
+      - '--providers.docker.swarmMode=true'
+      - '--providers.docker.swarmModeRefreshSeconds=15s'
+      - '--providers.docker.exposedbydefault=false'
+      - '--providers.docker.defaultRule=Host("wshihadeh.cloud")'
+      - '--api=true'
+      - '--api.dashboard=true'
+      - '--api.insecure=true'
+      - '--ping.entryPoint=web'
+      - '--accesslog=true'
+      - '--accessLog.bufferingSize=0'
+      - '--accesslog.format=json'
+      - '--accesslog.fields.defaultmode=keep'
+      - '--accesslog.fields.names.ClientUsername=keep'
+      - '--accesslog.fields.headers.defaultmode=keep'
+    volumes:
+      - '/var/run/docker.sock:/var/run/docker.sock:ro'
+    ports:
+      - '80:80'
+      - '8080:8080'
+    deploy:
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=traefik
+        - traefik.http.middlewares.my-basic-auth.basicauth.users=traefik:$$apr1$$SnHDtk1N$$cpc7xSXXrMVnPYdF01WdC0
+        # IP whiteList
+        - traefik.http.middlewares.ipwhitelist-prom.ipwhitelist.sourcerange=0.0.0.0/0
+        #- traefik.http.middlewares.ipwhitelist-prom.ipwhitelist.ipStrategy.excludedIPs=10.0.0.1,10.0.0.2
+        # inflightreq
+        - traefik.http.middlewares.inflightreq-pink.inflightreq.amount=10
+        - traefik.http.middlewares.inflightreq-pink.inflightreq.sourcecriterion.ipstrategy.excludedips=127.0.0.1
+        - traefik.http.middlewares.inflightreq-pink.inflightreq.sourcecriterion.requestheadername=X-Forwarded-Server
+        - traefik.http.middlewares.inflightreq-pink.inflightreq.sourcecriterion.requesthost=true
+        # ratelimit
+        - traefik.http.middlewares.pink-ratelimit.ratelimit.average=10
+        - traefik.http.middlewares.pink-ratelimit.ratelimit.period=10s
+        - traefik.http.middlewares.pink-ratelimit.ratelimit.burst=1
+        - traefik.http.middlewares.pink-ratelimit.ratelimit.sourcecriterion.ipstrategy.excludedips=10.0.0.4
+        - traefik.http.middlewares.pink-ratelimit.ratelimit.sourcecriterion.requestheadername=X-Real-Ip
+        - traefik.http.middlewares.pink-ratelimit.ratelimit.sourcecriterion.requesthost=true
+        # Dashboard Router
+        - traefik.http.services.traefik-dashboard.loadbalancer.server.port=8080
+        - traefik.http.routers.traefik-dashboard.rule=Host(`dashboard.wshihadeh.cloud`)
+        - traefik.http.routers.traefik-dashboard.service=traefik-dashboard
+        - traefik.http.routers.traefik-dashboard.entrypoints=web
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      update_config:
+        delay: 10s
+        order: start-first
+        parallelism: 1
+      rollback_config:
+        parallelism: 0
+        order: stop-first
+    logging:
+      driver: json-file
+      options:
+        'max-size': '10m'
+        'max-file': '5'
+    networks:
+      - traefik
